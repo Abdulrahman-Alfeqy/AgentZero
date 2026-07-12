@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  agent-zero:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agent-zero
+    restart: unless-stopped
+
+    # Mount .env file for secrets — never hardcode tokens
+    env_file:
+      - .env
+    environment:
+      - DASHBOARD_HOST=0.0.0.0
+
+    # Expose dashboard and MCP ports
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+
+    # Persist incidents and reports across container restarts
+    volumes:
+      - ./incidents.jsonl:/app/incidents.jsonl
+      - ./reports:/app/reports
+
+    # Health check via process monitoring
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+    # Resource limits — adjust as needed
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+

@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Agent Zero — Real-time compliance monitoring dashboard for sensitive data incidents detected in Slack." />
+  <title>Agent Zero — Compliance Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & Tokens ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #F5F1EA;
+      --surface:     #FFFFFF;
+      --shadow-soft: 0 4px 12px rgba(0,0,0,0.02);
+      
+      --accent-good:    #9CB59B;
+      --accent-warn:    #CFA5A5;
+      --accent-crit:    #7B5EA7;
+      
+      --text-1:      #5C4B51;
+      --text-2:      #7A6A70;
+      
+      --interactive: #76B4BD;
+      --interactive-hover: #5A9A9D;
+      
+      --radius:      16px;
+      --radius-sm:   10px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-weight: 400;
+      background: var(--bg);
+      color: var(--text-1);
+      min-height: 100vh;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 40px;
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo-icon {
+      font-size: 24px;
+      color: var(--text-1);
+    }
+
+    .logo-text h1 {
+      font-size: 20px;
+      color: var(--text-1);
+    }
+
+    .logo-text span {
+      font-size: 13px;
+      color: var(--text-2);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .last-updated {
+      font-size: 13px;
+      color: var(--text-2);
+    }
+
+    /* ── Main Layout ─────────────────────────────────────────── */
+    main {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 24px;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* ── Hero Status Area ────────────────────────────────────── */
+    #hero-status {
+      border-radius: var(--radius);
+      padding: 48px;
+      text-align: center;
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      transition: background-color 0.5s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    #hero-icon {
+      font-size: 48px;
+      margin-bottom: 8px;
+    }
+
+    #hero-title {
+      font-size: 32px;
+      color: #FFFFFF;
+    }
+
+    #hero-subtitle {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.9);
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    /* ── Tabs Navigation ─────────────────────────────────────── */
+    .tabs-nav {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      border-bottom: 1px solid rgba(92, 75, 81, 0.1);
+      padding-bottom: 16px;
+    }
+
+    .tab-button {
+      background: none;
+      border: none;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-2);
+      cursor: pointer;
+      padding: 8px 16px;
+      position: relative;
+      transition: color 0.3s;
+    }
+
+    .tab-button:hover {
+      color: var(--interactive);
+    }
+
+    .tab-button.active {
+      color: var(--interactive);
+    }
+
+    .tab-button.active::after {
+      content: '';
+      position: absolute;
+      bottom: -17px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background-color: var(--interactive);
+    }
+
+    .tab-content {
+      display: none;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-soft);
+      padding: 32px;
+      min-height: 300px;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Tab 1: Overview stats ───────────────────────────────── */
+    .overview-stats {
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+      margin-top: 24px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--text-2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 500;
+      color: var(--text-1);
+    }
+
+    /* ── Charts & Channels ───────────────────────────────────── */
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 300px;
+    }
+
+    .channel-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .channel-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: rgba(92, 75, 81, 0.03);
+      border-radius: var(--radius-sm);
+    }
+
+    .channel-rank {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      color: #FFFFFF;
+    }
+
+    .rank-1 { background: var(--accent-crit); }
+    .rank-2 { background: var(--accent-warn); }
+    .rank-3 { background: var(--accent-good); }
+
+    .channel-name {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .channel-count {
+      font-size: 14px;
+      color: var(--text-2);
+      background: #FFFFFF;
+      padding: 4px 12px;
+      border-radius: 12px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    /* ── Empty State As Art ──────────────────────────────────── */
+    #empty-dashboard {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 20px;
+      gap: 24px;
+    }
+    
+    #empty-dashboard.visible {
+      display: flex;
+    }
+
+    /* Minimalist CSS plant art */
+    .calm-art {
+      width: 120px;
+      height: 120px;
+      position: relative;
+    }
+    .calm-art .pot {
+      position: absolute;
+      bottom: 0;
+      left: 30px;
+      width: 60px;
+      height: 40px;
+      background: var(--accent-warn);
+      border-radius: 4px 4px 16px 16px;
+    }
+    .calm-art .stem {
+      position: absolute;
+      bottom: 40px;
+      left: 58px;
+      width: 4px;
+      height: 50px;
+      background: var(--accent-good);
+      border-radius: 2px;
+    }
+    .calm-art .leaf-left {
+      position: absolute;
+      bottom: 60px;
+      left: 40px;
+      width: 24px;
+      height: 12px;
+      background: var(--accent-good);
+      border-radius: 12px 0 12px 0;
+      transform: rotate(20deg);
+    }
+    .calm-art .leaf-right {
+      position: absolute;
+      bottom: 75px;
+      left: 56px;
+      width: 20px;
+      height: 10px;
+      background: var(--accent-good);
+      border-radius: 0 10px 0 10px;
+      transform: rotate(-20deg);
+    }
+
+    #empty-dashboard .message {
+      font-size: 20px;
+      color: var(--text-1);
+      font-weight: 500;
+    }
+    #empty-dashboard .sub-message {
+      font-size: 16px;
+      color: var(--text-2);
+      max-width: 400px;
+      line-height: 1.8;
+    }
+
+    #dashboard-content {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    #dashboard-content.hidden {
+      display: none;
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🌿</div>
+      <div class="logo-text">
+        <h1>Agent Zero</h1>
+        <span>Security Assistant</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="last-updated" id="last-updated">Updating gently...</div>
+    </div>
+  </header>
+
+  <!-- ── Main ────────────────────────────────────────────────────── -->
+  <main>
+    
+    <!-- Global Empty State -->
+    <div id="empty-dashboard">
+      <div class="calm-art">
+        <div class="leaf-left"></div>
+        <div class="leaf-right"></div>
+        <div class="stem"></div>
+        <div class="pot"></div>
+      </div>
+      <div class="message">All is quiet.</div>
+      <div class="sub-message">Agent Zero is silently guarding your channels. No sensitive data detected.</div>
+    </div>
+
+    <!-- Active Content -->
+    <div id="dashboard-content">
+      
+      <!-- Hero Status -->
+      <section id="hero-status">
+        <div id="hero-icon">🛡️</div>
+        <h2 id="hero-title">Environment is Secure</h2>
+        <p id="hero-subtitle">No active threats detected.</p>
+      </section>
+
+      <!-- Progressive Disclosure Tabs -->
+      <nav class="tabs-nav">
+        <button class="tab-button active" onclick="switchTab('tab-overview')">Overview</button>
+        <button class="tab-button" onclick="switchTab('tab-risks')">Risk Analysis</button>
+        <button class="tab-button" onclick="switchTab('tab-channels')">Top Channels</button>
+      </nav>
+
+      <!-- Tab 1: Overview -->
+      <div id="tab-overview" class="tab-content active">
+        <div class="overview-stats">
+          <div class="stat-item">
+            <span class="stat-label">Total Incidents</span>
+            <span class="stat-value" id="stat-total-incidents">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Most Common Risk</span>
+            <span class="stat-value" id="stat-common-risk">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Risk Analysis -->
+      <div id="tab-risks" class="tab-content">
+        <div class="chart-container">
+          <canvas id="pie-chart" aria-label="Pie chart of risk type distribution"></canvas>
+        </div>
+      </div>
+
+      <!-- Tab 3: Top Channels -->
+      <div id="tab-channels" class="tab-content">
+        <ul class="channel-list" id="channel-list">
+          <li class="empty-state">No incidents recorded yet.</li>
+        </ul>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    // ── Chart.js defaults ─────────────────────────────────────────────────
+    Chart.defaults.color = '#7A6A70';
+    Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+    Chart.defaults.font.size = 14;
+
+    // Soft monochromatic palette for Pie Chart
+    const PIE_COLORS = [
+      '#76B4BD', // Dusty Blue
+      '#9CB59B', // Sage Green
+      '#CFA5A5', // Peach
+      '#7B5EA7', // Dusty Plum
+      '#8C99A6', // Soft Slate
+      '#D5C7BC'  // Warm Sand
+    ];
+
+    let pieChart;
+
+    function initCharts() {
+      pieChart = new Chart(document.getElementById('pie-chart'), {
+        type: 'doughnut',
+        data: {
+          labels: [],
+          datasets: [{
+            data: [],
+            backgroundColor: PIE_COLORS,
+            borderColor: '#FFFFFF',
+            borderWidth: 2,
+            hoverOffset: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                padding: 20,
+                boxWidth: 12,
+                font: { size: 13, weight: 500 },
+              }
+            },
+            tooltip: {
+              backgroundColor: '#FFFFFF',
+              borderColor: 'rgba(92, 75, 81, 0.1)',
+              borderWidth: 1,
+              titleColor: '#5C4B51',
+              bodyColor: '#7A6A70',
+              padding: 12,
+            }
+          }
+        }
+      });
+    }
+
+    // ── Tab Switching ─────────────────────────────────────────────────────
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      
+      // Resize charts if risk tab is selected
+      if (tabId === 'tab-risks' && pieChart) {
+        pieChart.resize();
+      }
+    }
+
+    // ── Render data ───────────────────────────────────────────────────────
+    function updateDashboard(data) {
+      if (!data || data.total === 0) {
+        document.getElementById('empty-dashboard').classList.add('visible');
+        document.getElementById('dashboard-content').classList.add('hidden');
+        return;
+      } else {
+        document.getElementById('empty-dashboard').classList.remove('visible');
+        document.getElementById('dashboard-content').classList.remove('hidden');
+      }
+
+      const highCount = data.severity_counts?.HIGH || 0;
+      const heroStatus = document.getElementById('hero-status');
+      const heroIcon = document.getElementById('hero-icon');
+      const heroTitle = document.getElementById('hero-title');
+      const heroSubtitle = document.getElementById('hero-subtitle');
+
+      // Hero Logic
+      if (highCount === 0) {
+        heroStatus.style.backgroundColor = 'var(--accent-good)';
+        heroIcon.textContent = '🛡️';
+        heroTitle.textContent = 'Environment is Secure';
+        heroSubtitle.textContent = 'No active threats detected.';
+      } else if (highCount >= 1 && highCount <= 3) {
+        heroStatus.style.backgroundColor = 'var(--accent-warn)';
+        heroIcon.textContent = '📋';
+        heroTitle.textContent = 'Needs Review';
+        heroSubtitle.textContent = 'There are items requiring your attention when you\'re available.';
+      } else {
+        heroStatus.style.backgroundColor = 'var(--accent-crit)';
+        heroIcon.textContent = '⚡';
+        heroTitle.textContent = 'Active Threats';
+        heroSubtitle.textContent = 'Active threats require immediate investigation.';
+      }
+
+      // Overview Stats
+      document.getElementById('stat-total-incidents').textContent = data.total || 0;
+      
+      let commonRisk = '—';
+      if (data.risk_type_distribution && data.risk_type_distribution.data.length > 0) {
+        let maxIdx = data.risk_type_distribution.data.indexOf(Math.max(...data.risk_type_distribution.data));
+        commonRisk = data.risk_type_distribution.labels[maxIdx];
+      }
+      document.getElementById('stat-common-risk').textContent = commonRisk;
+
+      // Pie chart
+      if (data.risk_type_distribution) {
+        pieChart.data.labels   = data.risk_type_distribution.labels;
+        pieChart.data.datasets[0].data = data.risk_type_distribution.data;
+        pieChart.update('active');
+      }
+
+      // Top channels
+      const list = document.getElementById('channel-list');
+      if (!data.top_channels || data.top_channels.length === 0) {
+        list.innerHTML = '<li class="empty-state">No incidents recorded yet.</li>';
+      } else {
+        list.innerHTML = '';
+        data.top_channels.slice(0, 3).forEach((ch, i) => {
+          const li = document.createElement('li');
+          li.className = 'channel-item';
+          
+          const rankDiv = document.createElement('div');
+          rankDiv.className = `channel-rank rank-${i + 1}`;
+          rankDiv.textContent = i + 1;
+          
+          const nameDiv = document.createElement('div');
+          nameDiv.className = 'channel-name';
+          nameDiv.textContent = `#${ch.channel}`;
+          
+          const countDiv = document.createElement('div');
+          countDiv.className = 'channel-count';
+          countDiv.textContent = `${ch.count} incidents`;
+          
+          li.appendChild(rankDiv);
+          li.appendChild(nameDiv);
+          li.appendChild(countDiv);
+          
+          list.appendChild(li);
+        });
+      }
+
+      // Last updated
+      const now = new Date();
+      document.getElementById('last-updated').textContent =
+        `Updated ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    // ── Fetch & refresh ───────────────────────────────────────────────────
+    async function fetchData() {
+      try {
+        const res = await fetch('/dashboard/data');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        updateDashboard(data);
+      } catch (err) {
+        console.warn('Dashboard fetch failed:', err.message);
+        document.getElementById('last-updated').textContent = '⚠️ Refresh paused';
+      }
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────
+    initCharts();
+    fetchData();
+    setInterval(fetchData, 30_000);
+  </script>
+</body>
+</html>
